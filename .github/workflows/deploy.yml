@@ -1,0 +1,36 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site and render app icons from icon.svg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin
+          mkdir -p _site
+          cp index.html app.js app.css data.js store.js firebase-config.js sw.js manifest.webmanifest icon.svg _site/
+          rsvg-convert -w 180 -h 180 icon.svg -o _site/apple-touch-icon.png
+          rsvg-convert -w 192 -h 192 icon.svg -o _site/icon-192.png
+          rsvg-convert -w 512 -h 512 icon.svg -o _site/icon-512.png
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
