@@ -18,7 +18,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=1">
+<link rel="stylesheet" href="app.css?v=2">
+<script>
+// Home-screen app on iPhone: iOS sizes the page as if the status bar were not there, which leaves the
+// tab bar floating above the bottom edge. Measure the real screen height and size the app to it.
+(function () {
+  var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  var root = document.documentElement;
+  root.setAttribute('data-standalone', '');
+  function fit() {
+    var land = window.innerWidth > window.innerHeight;
+    var sh = land ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+    var gap = sh - window.innerHeight;
+    if (gap > 0 && gap < 140) root.style.setProperty('--app-h', sh + 'px');
+    else root.style.removeProperty('--app-h');
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', function () { setTimeout(fit, 300); });
+})();
+</script>
 </head>
 <body>
 <main id="main"></main>
