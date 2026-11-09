@@ -1,6 +1,6 @@
 // Offline shell: app files update from the network when online, fall back to cache when not.
-const CACHE = 'grime-v2';
-const SHELL = ['./', './index.html', './app.css?v=2', './app.js?v=1', './data.js', './store.js', './firebase-config.js', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png'];
+const CACHE = 'grime-v3';
+const SHELL = ['./', './index.html', './app.css?v=3', './app.js?v=1', './data.js', './store.js', './firebase-config.js', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
