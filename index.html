@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grime League</title>
+<meta name="description" content="A monthly deep-clean league for two.">
+<meta name="theme-color" content="#F5EEE1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131210" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grime League">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+<main id="main"></main>
+<nav id="tabs" aria-label="Sections">
+  <button class="tab on" data-tab="round"><span class="ti">🧽</span>Round</button>
+  <button class="tab" data-tab="board"><span class="ti">🏆</span>Board</button>
+  <button class="tab" data-tab="tasks"><span class="ti">📋</span>Tasks</button>
+  <button class="tab" data-tab="settings"><span class="ti">⚙️</span>Settings</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<canvas id="fx"></canvas>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
