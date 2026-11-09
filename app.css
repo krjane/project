@@ -11,6 +11,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 body{position:fixed;top:0;left:0;right:0;height:var(--app-h,100%);overflow:hidden}
+html[data-standalone]{min-height:min(100lvh,calc(100% + env(safe-area-inset-top)))}
 button{font:inherit;color:inherit;-webkit-user-select:none;user-select:none}
 #main{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--sat) + 14px) 16px calc(var(--tabh) + var(--sab) + 28px);overscroll-behavior-y:contain}
 body.noTabs #tabs{display:none}
