@@ -62,7 +62,7 @@ function plan(i) {
   const tol = house.rules.tolerance ?? 2;
   const tot = [0, 0], base = {};
   d.filter((x) => x.kind === 'one' && (x.t.who === 0 || x.t.who === 1)).forEach((x) => { base[x.id] = x.t.who; tot[x.t.who] += x.t.p; });
-  d.filter((x) => base[x.id] === undefined)
+  const assign = (list) => list
     .sort((a, b) => b.t.p - a.t.p || (a.id < b.id ? -1 : 1))
     .forEach((x) => {
       const occ = x.kind === 'rec' ? Math.floor((i - x.t.off) / x.t.f) : 0;
@@ -71,6 +71,9 @@ function plan(i) {
       if (cp > tol && co < cp) p = o;
       base[x.id] = p; tot[p] += x.t.p;
     });
+  // focus items go last, so starting a focus never reshuffles the rest of the round
+  assign(d.filter((x) => base[x.id] === undefined && !x.t.focus));
+  assign(d.filter((x) => base[x.id] === undefined));
   const ms = house.months?.[keyOf(i)] || {}, sw = ms.swap || {}, dn = ms.done || {};
   // mystery task: fixed per month; once found it stays where it was found
   let mysteryId = null;
@@ -193,7 +196,7 @@ function completeTask(i, x) {
     return toast(`${pName(x.done.by)} already claimed this one.`);
   }
   let bonus = false;
-  if (x.who !== me) {
+  if (x.who !== me && !x.t.focus) {
     if (!bountyOpen(i)) { haptic(2); return toast(`That one’s ${pName(x.who)}’s. Swap it, or wait for bounty hour on the ${ordinal(house.rules.bountyDay)}.`); }
     bonus = true;
   }
@@ -273,6 +276,19 @@ function viewRound() {
   });
   h += `<div class="vs">VS</div></section>`;
 
+  // focus: a short, named team push (e.g. guests coming), pinned above everything else
+  const focusList = activeFocuses(i);
+  const focusIds = new Set(focusList.map(([fid]) => fid));
+  focusList.forEach(([fid, f]) => {
+    const items = s.pl.filter((x) => x.kind === 'one' && x.t.focus === fid).sort((a, b) => (!!a.done - !!b.done) || b.t.p - a.t.p);
+    if (!items.length) return;
+    const fd = items.filter((x) => x.done).length, fp = Math.round((fd / items.length) * 100);
+    h += `<section class="card focus"><div class="row-sb"><div><div class="eyebrow">Focus · ${dueLabel(f.due)}</div><div class="ftitle">${esc(f.e || '✨')} ${esc(f.n)}</div></div><div class="tnum">${fd}<span>/${items.length}</span></div></div>
+      <div class="meter team"><i style="width:${fp}%"></i></div>
+      <div class="row-sb fnote"><span class="fine">${fd === items.length ? 'All set. Light a candle, you earned it. 🕯️' : 'Team push: either of you can check these off.'}</span><button class="pill" data-a="focusmenu" data-id="${fid}">Edit</button></div></section>
+      <div class="list focuslist">${items.map((x) => taskRow(i, x)).join('')}</div>`;
+  });
+
   // team goal
   const done = s.total - s.left, tp = s.total ? Math.round((done / s.total) * 100) : 0;
   h += `<section class="card team ${s.cleared ? 'won' : ''}"><div class="row-sb"><div><div class="eyebrow">Team goal</div><div class="tg">${s.cleared ? 'Unlocked: ' : 'Clear every task → '}<b>${esc(teamReward(i))}</b></div></div><div class="tnum">${done}<span>/${s.total}</span></div></div><div class="meter team"><i style="width:${tp}%"></i></div></section>`;
@@ -300,7 +316,7 @@ function viewRound() {
     <button class="pill ${ui.hideDone ? 'on' : ''}" data-a="hidedone">${ui.hideDone ? 'Show done' : 'Hide done'}</button></div>`;
   if (dev.swipeHint && !future) h += `<div class="hint">👉 Swipe right to finish · 👈 swipe left to swap <button data-a="hint-off" aria-label="Dismiss">✕</button></div>`;
 
-  let rows = s.pl;
+  let rows = s.pl.filter((x) => !(x.kind === 'one' && focusIds.has(x.t.focus)));
   if (ui.filter === 'mine' && me !== null) rows = rows.filter((x) => x.who === me || (x.done && x.done.by === me));
   if (ui.filter === 'theirs' && me !== null) rows = rows.filter((x) => x.who !== me && !(x.done && x.done.by === me));
   if (ui.hideDone) rows = rows.filter((x) => !x.done);
@@ -325,7 +341,7 @@ function viewRound() {
 }
 function taskRow(i, x) {
   const me = dev.me, b = bountyOpen(i) && i <= curRound(), d = x.done;
-  const snag = !d && b && me !== null && me !== x.who;
+  const snag = !d && b && me !== null && me !== x.who && !x.t.focus;
   const mult = snag ? house.rules.bountyMult || 1.5 : 1;
   const ptsTxt = d ? `+${d.pts}` : `${Math.ceil(x.t.p * mult)} pt${x.t.p === 1 && mult === 1 ? '' : 's'}`;
   const by = d ? d.by : x.who;
@@ -412,6 +428,7 @@ function viewTasks() {
       h += `</div>`;
     }
     h += `<button class="bigbtn" data-a="addone">${ICON.plus} New one-off task</button>`;
+    h += `<button class="bigbtn" data-a="addfocus">🥂 New focus (guests coming, quick reset…)</button>`;
   } else {
     h += `<div class="list">`;
     roomsSorted().forEach(([r, rm]) => {
@@ -484,8 +501,8 @@ function findRow(i, id) { return plan(i).find((x) => x.id === id); }
 function openTask(i, id) {
   const x = findRow(i, id); if (!x) return;
   const me = dev.me, d = x.done, C = curRound();
-  const snag = !d && bountyOpen(i) && me !== null && me !== x.who && i <= C;
-  const canDo = !d && i <= C && (x.who === me || snag);
+  const snag = !d && bountyOpen(i) && me !== null && me !== x.who && i <= C && !x.t.focus;
+  const canDo = !d && i <= C && me !== null && (x.who === me || snag || !!x.t.focus);
   let btns = '';
   if (canDo) btns += `<button class="bigbtn primary" data-s="do" style="--pc:${P(me).color}">${snag ? `🎯 Snag it · +${Math.ceil(x.t.p * house.rules.bountyMult)}` : `✓ Done · +${x.t.p}${x.mystery ? '?' : ''}`}</button>`;
   if (d && d.by === me) btns += `<button class="bigbtn" data-s="undo">Undo</button>`;
@@ -564,7 +581,7 @@ function editOneoff(id) {
       if (v === 'save') {
         const n = val(ov, 'n'); if (!n) return toast('Give it a name first.');
         const m = keyOf(+ov.querySelector('.mseg .on').dataset.s.slice(1)), w = ov.querySelector('.wseg .on').dataset.s;
-        write(['oneoffs', id || newId('o')], { n, r: val(ov, 'r'), p: +ov.querySelector('.ptsv').textContent, m, who: w === 'wa' ? null : +w.slice(1), q: t.q || 'One-Off Wonder', tip: val(ov, 'tip') });
+        write(['oneoffs', id || newId('o')], { n, r: val(ov, 'r'), p: +ov.querySelector('.ptsv').textContent, m, who: w === 'wa' ? null : +w.slice(1), q: t.q || 'One-Off Wonder', tip: val(ov, 'tip'), ...(t.focus ? { focus: t.focus } : {}) });
         close(); haptic(); sfx.tick(); toast(isNew ? `Added <b>${esc(n)}</b> to ${monthName(roundOfKey(m))}` : 'Saved.');
       }
     },
@@ -623,6 +640,78 @@ function editList(k) {
       const lines = ov.querySelector('[name=l]').value.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 40);
       if (!lines.length) return toast('Keep at least one.');
       write(['lists', k], lines); close(); toast('Saved.');
+    },
+  });
+}
+// ───────────── focus (short team pushes) ─────────────
+const ymd = (t) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+function dueLabel(due) {
+  if (!due) return 'this round';
+  const days = Math.round((parseYmd(due) - parseYmd(ymd(NOW()))) / 86400000);
+  if (days < 0) return 'wrapped up';
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return 'by ' + parseYmd(due).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function activeFocuses(i) {
+  const k = keyOf(i), today = parseYmd(ymd(NOW()));
+  return Object.entries(house.focuses || {})
+    .filter(([, f]) => f.m === k && (!f.due || (today - parseYmd(f.due)) / 86400000 <= 1))
+    .sort((a, b) => ((a[1].due || '') < (b[1].due || '') ? -1 : 1));
+}
+function guessRoom(n) {
+  const s = n.toLowerCase(), has = (r) => (house.rooms[r] ? r : null);
+  return (/(fridge|stove|oven|microwave|appliance|sink|dish|counter|kitchen|pantry)/.test(s) && has('kitchen'))
+    || (/(toilet|bath|shower|tub|mirror)/.test(s) && has('bath'))
+    || (/(entry|shoe|front door|coat|mat)/.test(s) && has('front'))
+    || (/(couch|living)/.test(s) && has('living'))
+    || (/(guest|desk)/.test(s) && has('guest'))
+    || has('whole') || roomsSorted()[0]?.[0];
+}
+function editFocus() {
+  const tmr = NOW(); tmr.setDate(tmr.getDate() + 1);
+  sheet(`<div class="shead"><div><div class="eyebrow">New focus</div><h2>A quick team push</h2></div></div>
+    <p class="lead">For a short burst, like guests coming over. The tasks get pinned to the top of the round, either of you can check them off, and they count for points.</p>
+    <label class="fld"><span>Name</span><input name="n" placeholder="e.g. Feel-good clean before guests" maxlength="50"></label>
+    <div class="fld"><span>Icon</span><div class="emojis">${['🥂', '🎉', '🏠', '🧳', '🎄', '🍽️', '👀', '🧹'].map((e, k) => `<button type="button" data-s="e:${e}" class="${k === 0 ? 'on' : ''}">${e}</button>`).join('')}</div></div>
+    <label class="fld"><span>Done by</span><input type="date" name="due" value="${ymd(tmr)}" min="${ymd(NOW())}"></label>
+    <label class="fld"><span>Tasks <em>(one per line · add (3) at the end for 3 pts)</em></span><textarea name="items" rows="6" placeholder="Wipe appliance fronts&#10;Vacuum all spaces (3)&#10;Dust surfaces"></textarea></label>
+    ${fieldPts(2)}
+    <div class="btns"><button class="bigbtn primary" data-s="save">Start focus</button><button class="bigbtn ghost" data-s="close">Cancel</button></div>`, {
+    action(v, a, ov, close) {
+      if (ptsHandler(v, ov)) return;
+      if (v.startsWith('e:')) { ov.querySelectorAll('.emojis button').forEach((b) => b.classList.toggle('on', b === a)); haptic(); return; }
+      if (v !== 'save') return;
+      const n = val(ov, 'n') || 'Quick team push', due = val(ov, 'due') || ymd(tmr);
+      const lines = ov.querySelector('[name=items]').value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 20);
+      if (!lines.length) return toast('Add at least one task.');
+      const r = roundOfKey(due.slice(0, 7)); if (r < 0) return toast('Pick a date in November 2026 or later.');
+      const m = keyOf(r), base = +ov.querySelector('.ptsv').textContent, fid = newId('f');
+      const e = ov.querySelector('.emojis .on')?.dataset.s.slice(2) || '✨';
+      const pairs = [[['focuses', fid], { n, e, due, m, created: ymd(NOW()) }]];
+      lines.forEach((line, k) => {
+        const mm = line.match(/^(.*?)\s*\((\d{1,2})\)\s*$/), name = (mm ? mm[1] : line).replace(/^[-•*]\s+/, '');
+        pairs.push([['oneoffs', fid + 'i' + k], { n: name, r: guessRoom(name), p: mm ? Math.max(1, Math.min(10, +mm[2])) : base, m, who: null, q: 'Host With the Most', tip: '', focus: fid }]);
+      });
+      store.multi(pairs); close(); haptic(); sfx.win(); ui.tab = 'round'; ui.view = r; render(); $('#main').scrollTo(0, 0);
+      toast(`${esc(e)} <b>${esc(n)}</b> is on. ${lines.length} tasks pinned to the top.`, 3200);
+    },
+  });
+}
+function focusMenu(fid) {
+  const f = (house.focuses || {})[fid]; if (!f) return;
+  const items = Object.entries(house.oneoffs || {}).filter(([, t]) => t.focus === fid);
+  const open = items.filter(([oid, t]) => !house.months?.[t.m]?.done?.[oid]);
+  sheet(`<div class="shead"><span class="remoji">${esc(f.e || '✨')}</span><div><div class="eyebrow">Focus · ${dueLabel(f.due)}</div><h2>${esc(f.n)}</h2></div></div>
+    <p class="lead">${items.length - open.length} of ${items.length} done. To change one task, tap it in the list and use Edit task. The focus disappears on its own the day after it's due.</p>
+    <div class="btns"><button class="bigbtn danger" data-s="end">${open.length ? `End now and drop the ${open.length} unfinished task${open.length === 1 ? '' : 's'}` : 'End focus now'}</button><button class="bigbtn ghost" data-s="close">Keep going</button></div>`, {
+    action(v, a, ov, close) {
+      if (v !== 'end') return;
+      if (!a.dataset.armed) { a.dataset.armed = 1; a.textContent = 'Tap again to end it'; haptic(2); return; }
+      const pairs = [[['focuses', fid], undefined]];
+      open.forEach(([oid]) => pairs.push([['oneoffs', oid], undefined]));
+      store.multi(pairs); close(); toast('Focus ended. Points you earned stay.');
     },
   });
 }
@@ -696,6 +785,8 @@ document.addEventListener('click', (e) => {
     case 'editlist': editList(a.dataset.k); break;
     case 'invite': invite(); break;
     case 'install': installHelp(); break;
+    case 'addfocus': editFocus(); break;
+    case 'focusmenu': focusMenu(id); break;
   }
 });
 document.addEventListener('change', (e) => {
